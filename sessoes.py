@@ -1,0 +1,1 @@
+sessoes_ativas = {}
