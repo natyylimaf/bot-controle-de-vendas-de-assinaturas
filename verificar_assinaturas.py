@@ -7,6 +7,7 @@ from datetime import datetime
 class VerificarAssinaturas(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.avisados = set()      # evita avisos repetidos
         self.verificar.start()   # inicia a task automática
 
     def cog_unload(self):
@@ -32,27 +33,30 @@ class VerificarAssinaturas(commands.Cog):
                 expira = datetime.strptime(data_fim, "%Y-%m-%d %H:%M:%S")
                 dias_faltando = (expira - agora).days
 
-                user = self.bot.get_user(usuario_id)
+                # descobre o id do Discord de quem está logado com esse usuário
+                discord_id = next(
+                    (d for d, u in self.bot.sessoes_ativas.items() if u["id"] == usuario_id),
+                    None
+                )
+                user = self.bot.get_user(discord_id) if discord_id else None
 
-                if user:
-                    if dias_faltando == 1:
-                        try:
-                            await user.send(
-                                "⚠️ *Aviso importante!*\n"
-                                "Seu plano expira **amanhã**!\n"
-                                "Deseja renovar?"
-                            )
-                        except:
-                            pass
+                if not user or dias_faltando not in (0, 1):
+                    continue
 
-                    if dias_faltando == 0:
-                        try:
-                            await user.send(
-                                "🔔 Seu plano expira **hoje**!\n"
-                                "Use `!planos` para renovar quando quiser."
-                            )
-                        except:
-                            pass
+                chave = (usuario_id, data_fim, dias_faltando)
+                if chave in self.avisados:
+                    continue
+
+                if dias_faltando == 1:
+                    texto = "⚠️ *Aviso importante!*\nSeu plano expira **amanhã**!\nUse `!planos` para renovar."
+                else:
+                    texto = "🔔 Seu plano expira **hoje**!\nUse `!planos` para renovar quando quiser."
+
+                try:
+                    await user.send(texto)
+                    self.avisados.add(chave)
+                except discord.Forbidden:
+                    pass
 
         except Exception as e:
             print("Erro ao verificar assinaturas:", e)
